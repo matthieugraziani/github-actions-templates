@@ -1,0 +1,108 @@
+name: 📊 Performance — Benchmarks & Profiling
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Benchmarks (pytest-benchmark)
+  # ──────────────────────────────────────────────
+  benchmarks:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]" pytest-benchmark
+
+      - name: Run benchmarks
+        run: |
+          pytest tests/benchmarks/ \
+            --benchmark-json=benchmark-results.json \
+            --benchmark-min-rounds=5 \
+            --benchmark-warmup=on \
+            -v
+
+      - name: Comparer avec baseline (main)
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: pytest
+          output-file-path: benchmark-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: ${{ github.ref == 'refs/heads/main' }}
+          alert-threshold: "130%"  # Alerte si +30% de régression
+          comment-on-alert: true
+          fail-on-alert: false
+          alert-comment-cc-users: "@maintainer"
+
+  # ──────────────────────────────────────────────
+  # 2. Analyse de la taille du package
+  # ──────────────────────────────────────────────
+  package-size:
+    name: Analyse taille du package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build + analyser taille
+        run: |
+          pip install build
+          python -m build
+          echo "## 📦 Taille du package" >> $GITHUB_STEP_SUMMARY
+          ls -lh dist/ | awk '{print $5, $9}' >> $GITHUB_STEP_SUMMARY
+
+  # ──────────────────────────────────────────────
+  # 3. Couverture de code — rapport détaillé
+  # ──────────────────────────────────────────────
+  coverage-report:
+    name: Rapport de couverture
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]" pytest-cov
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ \
+            --cov=src \
+            --cov-report=html:htmlcov \
+            --cov-report=term \
+            --cov-fail-under=80
+
+      - name: Upload HTML coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: htmlcov/
+
+      - name: Résumé couverture dans le job summary
+        run: |
+          echo "## 📊 Couverture de code" >> $GITHUB_STEP_SUMMARY
+          coverage report --format=markdown >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,128 @@
+name: 🤖 Automation — Issues & PRs
+
+on:
+  issues:
+    types: [opened, labeled, closed]
+  pull_request:
+    types: [opened, ready_for_review, closed, labeled]
+  pull_request_review:
+    types: [submitted]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: "0 9 * * 1"  # Lundi 9h — nettoyage hebdo
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Auto-label des PRs selon les fichiers modifiés
+  # ──────────────────────────────────────────────
+  auto-label-pr:
+    name: Auto-label PR
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          configuration-path: .github/labeler.yml
+
+  # ──────────────────────────────────────────────
+  # 2. Vérification taille de PR
+  # ──────────────────────────────────────────────
+  pr-size-check:
+    name: Vérification taille PR
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Vérifier la taille de la PR
+        uses: CodelyTV/pr-size-labeler@v1
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          xs_label: "size/XS"
+          xs_max_size: 10
+          s_label: "size/S"
+          s_max_size: 100
+          m_label: "size/M"
+          m_max_size: 500
+          l_label: "size/L"
+          l_max_size: 1000
+          xl_label: "size/XL"
+          fail_if_xl: false
+
+  # ──────────────────────────────────────────────
+  # 3. Welcome message sur les nouvelles issues/PRs
+  # ──────────────────────────────────────────────
+  welcome-first-contribution:
+    name: Message de bienvenue
+    runs-on: ubuntu-latest
+    if: >
+      (github.event_name == 'issues' && github.event.action == 'opened') ||
+      (github.event_name == 'pull_request' && github.event.action == 'opened')
+    steps:
+      - uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            Merci pour votre issue ! 🙏
+            L'équipe examinera votre demande dans les meilleurs délais.
+            En attendant, consultez la [documentation](../../wiki) ou les [issues similaires](../../issues).
+          pr-message: |
+            Merci pour votre contribution ! 🎉
+            Votre PR sera examinée dès que possible.
+            Assurez-vous que tous les checks CI sont au vert.
+
+  # ──────────────────────────────────────────────
+  # 4. Fermeture automatique des issues inactives
+  # ──────────────────────────────────────────────
+  stale:
+    name: Issues / PRs inactives
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: |
+            Cette issue est inactive depuis 60 jours.
+            Elle sera fermée dans 7 jours sans activité.
+            Commentez pour la garder ouverte.
+          stale-pr-message: |
+            Ce PR est inactif depuis 30 jours.
+            Il sera fermé dans 7 jours sans activité.
+          close-issue-message: "Fermée pour inactivité. Rouvrez si nécessaire."
+          close-pr-message: "Fermé pour inactivité. Rouvrez si nécessaire."
+          days-before-issue-stale: 60
+          days-before-pr-stale: 30
+          days-before-close: 7
+          stale-issue-label: "stale"
+          stale-pr-label: "stale"
+          exempt-issue-labels: "pinned,security,bug"
+          exempt-pr-labels: "pinned,security"
+
+  # ──────────────────────────────────────────────
+  # 5. Auto-merge des PRs Dependabot (patch/minor)
+  # ──────────────────────────────────────────────
+  auto-merge-dependabot:
+    name: Auto-merge Dependabot
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'pull_request' &&
+      github.actor == 'dependabot[bot]'
+    steps:
+      - name: Fetch Dependabot metadata
+        id: dependabot-metadata
+        uses: dependabot/fetch-metadata@v2
+
+      - name: Auto-merge patch/minor
+        if: >
+          steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

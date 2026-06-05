@@ -1,0 +1,80 @@
+name: ♻️ Reusable — Setup Python
+
+# Workflow réutilisable (appelable depuis d'autres workflows)
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: "Version Python"
+        required: false
+        default: "3.12"
+        type: string
+      install-extras:
+        description: "Extras pip à installer (ex: dev,docs)"
+        required: false
+        default: "dev"
+        type: string
+      run-tests:
+        description: "Exécuter les tests ?"
+        required: false
+        default: true
+        type: boolean
+      run-lint:
+        description: "Exécuter le lint ?"
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      token:
+        required: false
+    outputs:
+      coverage-percentage:
+        description: "Pourcentage de couverture de code"
+        value: ${{ jobs.setup-and-test.outputs.coverage }}
+
+jobs:
+  setup-and-test:
+    name: Setup Python ${{ inputs.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      coverage: ${{ steps.coverage.outputs.percentage }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python ${{ inputs.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[${{ inputs.install-extras }}]"
+
+      - name: Lint (Ruff)
+        if: inputs.run-lint
+        run: |
+          ruff check . --output-format=github
+          ruff format --check .
+
+      - name: Tests
+        if: inputs.run-tests
+        run: |
+          pytest tests/ \
+            --cov=src \
+            --cov-report=xml \
+            -q
+
+      - name: Extraire le pourcentage de couverture
+        if: inputs.run-tests
+        id: coverage
+        run: |
+          PERCENT=$(python -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('coverage.xml')
+          root = tree.getroot()
+          print(round(float(root.attrib['line-rate']) * 100, 1))
+          ")
+          echo "percentage=$PERCENT" >> $GITHUB_OUTPUT
+          echo "✅ Couverture : $PERCENT%"

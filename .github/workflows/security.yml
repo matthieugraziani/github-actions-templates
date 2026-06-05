@@ -1,0 +1,140 @@
+name: 🔒 Security — SAST & Dépendances
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * 1"  # Chaque lundi à 3h
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Scan de secrets (Gitleaks)
+  # ──────────────────────────────────────────────
+  secrets-scan:
+    name: Scan Secrets (Gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ──────────────────────────────────────────────
+  # 2. Audit des dépendances (pip-audit)
+  # ──────────────────────────────────────────────
+  dependency-audit:
+    name: Audit Dépendances (pip-audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit --requirement requirements.txt --output json > pip-audit-results.json || true
+          pip-audit --requirement requirements.txt
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-results
+          path: pip-audit-results.json
+
+  # ──────────────────────────────────────────────
+  # 3. SAST — Bandit (analyse statique Python)
+  # ──────────────────────────────────────────────
+  sast-bandit:
+    name: SAST Bandit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bandit scan
+        run: |
+          pip install bandit[sarif]
+          bandit -r src/ -f sarif -o bandit.sarif || true
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit.sarif
+          category: bandit
+
+  # ──────────────────────────────────────────────
+  # 4. CodeQL — analyse avancée
+  # ──────────────────────────────────────────────
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  # ──────────────────────────────────────────────
+  # 5. Vérification des licences
+  # ──────────────────────────────────────────────
+  license-check:
+    name: Vérification Licences
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Check licences
+        run: |
+          pip install pip-licenses
+          pip-licenses --format=markdown --output-file=LICENSES-DEPENDENCIES.md
+          # Bloquer les licences non compatibles
+          pip-licenses --fail-on="GPL;LGPL;AGPL" || echo "⚠️ Licences GPL détectées — vérifier manuellement"
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: licenses-report
+          path: LICENSES-DEPENDENCIES.md

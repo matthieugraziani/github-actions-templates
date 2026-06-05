@@ -1,0 +1,110 @@
+name: 📚 Docs — Build & Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "src/**"
+      - "*.md"
+      - "mkdocs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Build MkDocs
+  # ──────────────────────────────────────────────
+  build-docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Pour git-revision-date-localized
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install MkDocs + plugins
+        run: |
+          pip install mkdocs-material \
+            mkdocs-autorefs \
+            mkdocstrings[python] \
+            mkdocs-git-revision-date-localized \
+            mkdocs-minify-plugin
+
+      - name: Build
+        run: mkdocs build --strict
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+  # ──────────────────────────────────────────────
+  # 2. Deploy GitHub Pages
+  # ──────────────────────────────────────────────
+  deploy-docs:
+    name: Deploy → GitHub Pages
+    runs-on: ubuntu-latest
+    needs: build-docs
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # ──────────────────────────────────────────────
+  # 3. Vérification des liens (linkchecker)
+  # ──────────────────────────────────────────────
+  check-links:
+    name: Vérification des liens
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Link Checker
+        uses: lycheeverse/lychee-action@v1
+        with:
+          args: --verbose --no-progress '**/*.md' '**/*.yml'
+          fail: false  # Warning seulement, pas d'échec CI
+
+  # ──────────────────────────────────────────────
+  # 4. Génération auto du CHANGELOG
+  # ──────────────────────────────────────────────
+  update-changelog:
+    name: Mise à jour CHANGELOG.md
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: git-cliff — Générer CHANGELOG
+        uses: orhun/git-cliff-action@v3
+        with:
+          config: cliff.toml
+          args: --unreleased --prepend CHANGELOG.md
+
+      - name: Commit CHANGELOG si modifié
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git diff --staged --quiet || git commit -m "docs: mise à jour automatique du CHANGELOG"
+          git push

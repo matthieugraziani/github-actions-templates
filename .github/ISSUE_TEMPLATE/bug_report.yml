@@ -1,0 +1,49 @@
+name: 🐛 Bug Report
+description: Signaler un bug
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: "Merci de prendre le temps de signaler ce bug !"
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description du bug
+      description: Description claire et concise du problème
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Étapes de reproduction
+      description: Comment reproduire le bug ?
+      value: |
+        1. ...
+        2. ...
+        3. Voir l'erreur
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportement attendu
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environnement
+      value: |
+        - OS: [ex: Ubuntu 24.04]
+        - Python: [ex: 3.12.2]
+        - Version du package: [ex: 1.2.3]
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Traceback
+      render: python

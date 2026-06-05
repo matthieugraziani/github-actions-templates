@@ -1,0 +1,105 @@
+name: 📦 Dependencies — Auto-update
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Lundi 6h
+  workflow_dispatch:
+    inputs:
+      update_type:
+        description: "Type de mise à jour"
+        required: true
+        default: "patch"
+        type: choice
+        options: [patch, minor, major]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Mise à jour pip-compile (requirements)
+  # ──────────────────────────────────────────────
+  update-requirements:
+    name: Update requirements.txt
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: pip-compile — mise à jour
+        run: |
+          pip install pip-tools
+          pip-compile pyproject.toml --upgrade --output-file requirements.txt
+          pip-compile pyproject.toml --extra dev --upgrade --output-file requirements-dev.txt
+
+      - name: Créer PR si changements
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(deps): mise à jour automatique des dépendances"
+          title: "⬆️ Mise à jour automatique des dépendances"
+          body: |
+            ## Mise à jour automatique des dépendances
+
+            Ce PR a été créé automatiquement par le workflow de mise à jour.
+
+            ### Changements
+            - `requirements.txt` mis à jour via `pip-compile --upgrade`
+            - `requirements-dev.txt` mis à jour via `pip-compile --upgrade`
+
+            ### Vérifications
+            - [ ] Les tests passent
+            - [ ] Pas de régression détectée
+            - [ ] Licences compatibles
+          branch: chore/deps-update-${{ github.run_number }}
+          labels: dependencies,automated
+          delete-branch: true
+
+  # ──────────────────────────────────────────────
+  # 2. Dependabot config (géré via fichier séparé)
+  # ──────────────────────────────────────────────
+  # Voir .github/dependabot.yml pour la config Dependabot
+  notify-outdated:
+    name: Rapport dépendances obsolètes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installer les dépendances
+        run: pip install -e ".[dev]"
+
+      - name: Vérifier les mises à jour disponibles
+        run: pip list --outdated --format=json > outdated.json
+
+      - name: Résumé des dépendances obsolètes
+        run: |
+          python -c "
+          import json
+          data = json.load(open('outdated.json'))
+          if not data:
+              print('✅ Toutes les dépendances sont à jour')
+          else:
+              print(f'⚠️ {len(data)} dépendance(s) obsolète(s):')
+              for pkg in data:
+                  print(f\"  - {pkg['name']}: {pkg['version']} → {pkg['latest_version']}\")
+          "
+
+      - name: Upload rapport
+        uses: actions/upload-artifact@v4
+        with:
+          name: outdated-deps-report
+          path: outdated.json

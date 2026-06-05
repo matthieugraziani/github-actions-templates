@@ -1,0 +1,113 @@
+name: 🔔 Notifications & Rapports
+
+on:
+  workflow_run:
+    workflows: ["🧪 CI — Tests & Qualité", "🚀 CD — Release & Publish"]
+    types: [completed]
+  schedule:
+    - cron: "0 8 * * 1"  # Rapport hebdo le lundi
+  workflow_dispatch:
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Notification de succès/échec CI
+  # ──────────────────────────────────────────────
+  notify-ci-result:
+    name: Notification résultat CI
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_run'
+    steps:
+      - name: Notifier succès
+        if: github.event.workflow_run.conclusion == 'success'
+        run: |
+          echo "✅ Workflow ${{ github.event.workflow_run.name }} réussi"
+          echo "Branch: ${{ github.event.workflow_run.head_branch }}"
+          echo "Commit: ${{ github.event.workflow_run.head_sha }}"
+          # Ajouter ici : notification Slack, Teams, email...
+
+      - name: Notifier échec
+        if: github.event.workflow_run.conclusion == 'failure'
+        run: |
+          echo "❌ Workflow ${{ github.event.workflow_run.name }} échoué !"
+          echo "URL: ${{ github.event.workflow_run.html_url }}"
+          # Ajouter ici : alerte urgente Slack, PagerDuty, etc.
+
+  # ──────────────────────────────────────────────
+  # 2. Notification Slack (si webhook configuré)
+  # ──────────────────────────────────────────────
+  slack-notification:
+    name: Notification Slack
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'failure' &&
+      secrets.SLACK_WEBHOOK_URL != ''
+    steps:
+      - name: Slack notification
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "❌ *${{ github.event.workflow_run.name }}* a échoué sur `${{ github.event.workflow_run.head_branch }}`",
+              "attachments": [{
+                "color": "danger",
+                "fields": [
+                  {"title": "Workflow", "value": "${{ github.event.workflow_run.name }}", "short": true},
+                  {"title": "Branche", "value": "${{ github.event.workflow_run.head_branch }}", "short": true},
+                  {"title": "Committer", "value": "${{ github.event.workflow_run.head_commit.author.name }}", "short": true},
+                  {"title": "Message", "value": "${{ github.event.workflow_run.head_commit.message }}", "short": false}
+                ],
+                "actions": [{
+                  "type": "button",
+                  "text": "Voir les logs",
+                  "url": "${{ github.event.workflow_run.html_url }}"
+                }]
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  # ──────────────────────────────────────────────
+  # 3. Rapport hebdomadaire de santé du projet
+  # ──────────────────────────────────────────────
+  weekly-health-report:
+    name: Rapport hebdomadaire
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Générer le rapport
+        id: report
+        run: |
+          echo "## 📊 Rapport hebdomadaire — $(date '+%d/%m/%Y')" >> rapport.md
+          echo "" >> rapport.md
+
+          # Commits de la semaine
+          COMMITS=$(git log --oneline --since="7 days ago" | wc -l)
+          echo "**Commits cette semaine :** $COMMITS" >> rapport.md
+
+          # Fichiers modifiés
+          FILES=$(git diff --name-only HEAD~7 HEAD 2>/dev/null | wc -l || echo "N/A")
+          echo "**Fichiers modifiés :** $FILES" >> rapport.md
+
+          # PRs fusionnées (nécessite gh CLI)
+          echo "" >> rapport.md
+          echo "### PRs fusionnées" >> rapport.md
+          gh pr list --state merged --search "merged:>$(date -d '7 days ago' +%Y-%m-%d)" \
+            --json number,title,author \
+            --jq '.[] | "- #\(.number) \(.title) (@\(.author.login))"' >> rapport.md || echo "N/A" >> rapport.md
+
+          cat rapport.md >> $GITHUB_STEP_SUMMARY
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload rapport
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-health-report
+          path: rapport.md
+          retention-days: 90
