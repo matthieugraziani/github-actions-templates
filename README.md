@@ -127,7 +127,7 @@ Push main  ──→ CI + Security + Docs + Docker + Notifications
 Push tag   ──→ Release + Docker + GitHub Release
 PR         ──→ CI + Security + Auto-labels + Size check
 Schedule   ──→ Deps update (lundi 6h) + Rapport (lundi 9h) + Stale
-Manual     ──→ Tous les workflows (workflow_dispatch)
+Manual     ──→ Tous les workflows (si ENABLE_GITHUB_ACTIONS=true)
 ```
 
 ---

@@ -1,0 +1,12 @@
+name: 🔒 Actions Status
+
+on:
+  workflow_call:
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Actions status
+        run: |
+          echo "GitHub Actions enabled: ${{ vars.ENABLE_GITHUB_ACTIONS || 'true' }}"
