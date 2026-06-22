@@ -11,14 +11,19 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  ENABLE_GITHUB_ACTIONS: ${{ vars.ENABLE_GITHUB_ACTIONS || 'true' }}
+
 jobs:
   # ──────────────────────────────────────────────
   # 1. Lint & formatage
   # ──────────────────────────────────────────────
   lint:
+    if: env.ENABLE_GITHUB_ACTIONS == 'true'
     name: Lint & Format
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -37,13 +42,16 @@ jobs:
       - name: Ruff — Format check
         run: ruff format --check .
 
+
   # ──────────────────────────────────────────────
   # 2. Type checking
   # ──────────────────────────────────────────────
   typecheck:
+    if: env.ENABLE_GITHUB_ACTIONS == 'true'
     name: Type Check (mypy)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -59,13 +67,17 @@ jobs:
       - name: mypy
         run: mypy src/ --ignore-missing-imports
 
+
   # ──────────────────────────────────────────────
   # 3. Tests unitaires — matrice Python
   # ──────────────────────────────────────────────
   tests:
+    if: env.ENABLE_GITHUB_ACTIONS == 'true'
     name: Tests Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
+
     timeout-minutes: 20
+
     strategy:
       fail-fast: false
       matrix:
