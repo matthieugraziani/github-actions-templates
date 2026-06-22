@@ -17,6 +17,9 @@ permissions:
   pull-requests: write
   contents: read
 
+env:
+  ENABLE_GITHUB_ACTIONS: ${{ vars.ENABLE_GITHUB_ACTIONS || 'true' }}
+
 jobs:
   # ──────────────────────────────────────────────
   # 1. Auto-label des PRs selon les fichiers modifiés

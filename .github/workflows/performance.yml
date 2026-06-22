@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  ENABLE_GITHUB_ACTIONS: ${{ vars.ENABLE_GITHUB_ACTIONS || 'true' }}
+
 jobs:
   # ──────────────────────────────────────────────
   # 1. Benchmarks (pytest-benchmark)

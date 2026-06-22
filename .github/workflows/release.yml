@@ -17,6 +17,9 @@ permissions:
   contents: write
   id-token: write  # OIDC pour PyPI trusted publishing
 
+env:
+  ENABLE_GITHUB_ACTIONS: ${{ vars.ENABLE_GITHUB_ACTIONS || 'true' }}
+
 jobs:
   # ──────────────────────────────────────────────
   # 1. Vérification pré-release

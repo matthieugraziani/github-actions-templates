@@ -14,6 +14,9 @@ permissions:
   security-events: write
   actions: read
 
+env:
+  ENABLE_GITHUB_ACTIONS: ${{ vars.ENABLE_GITHUB_ACTIONS || 'true' }}
+
 jobs:
   # ──────────────────────────────────────────────
   # 1. Scan de secrets (Gitleaks)

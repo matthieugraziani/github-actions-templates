@@ -17,6 +17,9 @@ permissions:
   contents: read
   packages: write  # Pour GHCR
 
+env:
+  ENABLE_GITHUB_ACTIONS: ${{ vars.ENABLE_GITHUB_ACTIONS || 'true' }}
+
 jobs:
   # ──────────────────────────────────────────────
   # 1. Build et scan de l'image Docker

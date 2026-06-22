@@ -8,6 +8,9 @@ on:
     - cron: "0 8 * * 1"  # Rapport hebdo le lundi
   workflow_dispatch:
 
+env:
+  ENABLE_GITHUB_ACTIONS: ${{ vars.ENABLE_GITHUB_ACTIONS || 'true' }}
+
 jobs:
   # ──────────────────────────────────────────────
   # 1. Notification de succès/échec CI

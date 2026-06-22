@@ -16,6 +16,9 @@ permissions:
   contents: write
   pull-requests: write
 
+env:
+  ENABLE_GITHUB_ACTIONS: ${{ vars.ENABLE_GITHUB_ACTIONS || 'true' }}
+
 jobs:
   # ──────────────────────────────────────────────
   # 1. Mise à jour pip-compile (requirements)

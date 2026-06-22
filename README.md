@@ -70,6 +70,8 @@ Dans **Settings → Secrets and variables → Actions** :
 |---|---|---|
 | `SLACK_WEBHOOK_URL` | `notifications.yml` | Webhook Slack (optionnel) |
 | `CODECOV_TOKEN` | `ci.yml` | Token Codecov (optionnel) |
+| `ENABLE_GITHUB_ACTIONS` | `true` | Active tous les workflows |
+| `ENABLE_GITHUB_ACTIONS` | `false` | Désactive l'exécution des jobs |
 
 > **Note :** PyPI utilise le **Trusted Publishing** (OIDC) — aucun token PyPI à stocker.
 
@@ -107,6 +109,15 @@ Le projet utilise les **Conventional Commits** :
 - `docs:` → 📚 Documentation
 - `chore(deps):` → 📦 Dépendances
 
+### Désactiver temporairement les workflows
+
+Pour bloquer toutes les automatisations sans supprimer les fichiers `.github/workflows` :
+
+```yaml
+ENABLE_GITHUB_ACTIONS=false
+```
+
+Les workflows resteront visibles mais leurs jobs seront ignorés.
 ---
 
 ## 📊 Vue d'ensemble des déclencheurs
