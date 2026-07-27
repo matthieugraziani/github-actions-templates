@@ -47,7 +47,7 @@ jobs:
       secrets.SLACK_WEBHOOK_URL != ''
     steps:
       - name: Slack notification
-        uses: slackapi/slack-github-action@v3
+        uses: slackapi/slack-github-action@v4
         with:
           payload: |
             {
